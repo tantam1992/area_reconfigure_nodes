@@ -8,7 +8,7 @@ from std_msgs.msg import Bool
 # List of docking areas
 docking_areas = [
     # Add your docking areas here
-    [(x1, y1), (x2, y2), (x3, y3), (x4, y4)]
+    [(-1.54, 47.50), (-1.54, 55.62), (-4.25, 55.49), (-4.16, 47.65)]
 ]
 
 class ToleranceReconfigureNode:
