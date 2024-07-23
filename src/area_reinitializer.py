@@ -51,7 +51,7 @@ class AreaReinitializerNode:
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.pose_callback)
 
         # Subscribe to reconfiguration enable/disable topic
-        rospy.Subscriber('/area_reconf_enable', Bool, self.enable_callback)
+        rospy.Subscriber('/rampreconf_enable', Bool, self.enable_callback)
 
         # Publish initial pose
         self.initialpose_pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped, queue_size=10)
