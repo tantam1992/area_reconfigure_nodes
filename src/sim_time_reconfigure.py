@@ -24,6 +24,16 @@ class SimTimeReconfigureNode:
         # Dynamic Reconfigure client
         self.reconfigure_client = dynamic_reconfigure.client.Client('move_base/DWAPlannerROS')
 
+    def wait_for_reconfigure_services(self):
+        try:
+            rospy.loginfo("Waiting for dynamic reconfigure services...")
+            rospy.wait_for_service('/move_base/DWAPlannerROS/set_parameters')
+            self.global_reconfigure_client = dynamic_reconfigure.client.Client('/move_base/DWAPlannerROS')
+            rospy.loginfo("Dynamic reconfigure services are ready.")
+        except rospy.ROSException as e:
+            rospy.logerr(f"Failed to connect to dynamic reconfigure services: {e}")
+            rospy.signal_shutdown("Shutting down due to service connection failure.")
+
     def goal_callback(self, goal_msg):
         self.current_goal = goal_msg
 
@@ -47,6 +57,7 @@ class SimTimeReconfigureNode:
         self.enable_reconfiguration = enable_msg.data  # Update enable/disable status
 
     def reconfigure_sim_time(self, new_sim_time):
+        self.wait_for_reconfigure_services()
         rospy.loginfo("Reconfiguring sim_time to: {}".format(new_sim_time))
         params = {'sim_time': new_sim_time}
         self.reconfigure_client.update_configuration(params)

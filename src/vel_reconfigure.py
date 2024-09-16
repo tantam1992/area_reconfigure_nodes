@@ -41,6 +41,16 @@ class VelReconfigureNode:
         # Dynamic Reconfigure client
         self.reconfigure_client = dynamic_reconfigure.client.Client('move_base/DWAPlannerROS')
 
+    def wait_for_reconfigure_services(self):
+        try:
+            rospy.loginfo("Waiting for dynamic reconfigure services...")
+            rospy.wait_for_service('/move_base/DWAPlannerROS/set_parameters')
+            self.global_reconfigure_client = dynamic_reconfigure.client.Client('/move_base/DWAPlannerROS')
+            rospy.loginfo("Dynamic reconfigure services are ready.")
+        except rospy.ROSException as e:
+            rospy.logerr(f"Failed to connect to dynamic reconfigure services: {e}")
+            rospy.signal_shutdown("Shutting down due to service connection failure.")
+
     def pose_callback(self, pose_msg):
         self.current_pose = pose_msg
         # rospy.loginfo("The current pose is : \n {}".format(pose_msg))
@@ -57,18 +67,21 @@ class VelReconfigureNode:
             if inside_ramp:
                 if not self.reconfiguration_done:  # Perform reconfiguration only once
                     rospy.loginfo("Robot is inside a ramp area.")
+                    self.wait_for_reconfigure_services()
                     self.reconfigure_max_vel(0.3)  # Adjust the max_vel_x parameter
                     self.reconfigure_min_vel(-0.15)
                     self.reconfiguration_done = True  # Set reconfiguration status
             elif inside_corridor:
                 if not self.reconfiguration_done:  # Perform reconfiguration only once
                     rospy.loginfo("Robot is inside a corridor area.")
+                    self.wait_for_reconfigure_services()
                     self.reconfigure_max_vel(0.5)
                     self.reconfigure_min_vel(0.0)
                     self.reconfiguration_done = True  # Set reconfiguration status
             else:
                 if self.reconfiguration_done:
                     rospy.loginfo("Robot is outside ramp and corridor areas.")
+                    self.wait_for_reconfigure_services()
                     self.reconfigure_max_vel(0.4)
                     self.reconfigure_min_vel(-0.3)
                     self.reconfiguration_done = False  # Reset reconfiguration status
