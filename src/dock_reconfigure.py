@@ -10,11 +10,15 @@ from std_msgs.msg import Bool
 # FiveF_dock_area_polygon = [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)]
 # LG_dock_area_polygon = [(-2.3715, 47.51), (-1.5262, 47.488), (-1.47, 56.148), (-2.1851, 56.092)]
 LG_dock_area_polygon = [(-75.65, -6.98), (-75.61, -6.45), (-84.18, -7.00), (-84.13, -7.79)]
+# LG_lift_area_polygon = [(-25.48, -3.04), (-25.84, -0.97), (-29.66, -1.53), (-29.25, -4.92)]
 FiveF_dock_area_polygon = [(1.4971, -19.281), (2.189, -19.467), (2.0321, -14.916), (1.4992, -14.899)]
+
 
 ## footprint
 small_footprint  = [[0.15, -0.40], [0.15, -0.31], [0.15, 0.31], [0.15, 0.40], [-0.97, 0.40], [-1.27, 0.10], [-1.27, -0.10], [-0.97, -0.40]]
+# med_footprint = [[0.31,-0.45],[0.45,-0.31],[0.45,0.31],[0.31,0.45],[-0.97,0.45],[-1.27,0.42],[-1.27,-0.42],[-0.97,-0.45]]
 big_footprint = [[0.31,-0.5],[0.5,-0.31],[0.5,0.31],[0.31,0.5],[-0.97,0.5],[-1.27,0.42],[-1.27,-0.42],[-0.97,-0.5]]
+
 
 class DockReconfigureNode:
     def __init__(self):
@@ -67,6 +71,12 @@ class DockReconfigureNode:
                     # Reconfigure footprint for local and global costmaps
                     self.reconfigure_footprint(small_footprint)
                     self.reconfiguration_done = True
+            # elif self.check_is_inside_lg_lift_area(pose_msg.position):
+            #     if not self.reconfiguration_done:
+            #         rospy.loginfo("Robot is close to LG lift area.")
+            #         # Reconfigure footprint for local and global costmaps
+            #         self.reconfigure_footprint(med_footprint)
+            #         self.reconfiguration_done = True
             else:
                 if self.reconfiguration_done:
                     rospy.loginfo("Robot is outside LG docking area.")
@@ -94,7 +104,12 @@ class DockReconfigureNode:
         x, y = position.x, position.y
         inside = self.point_inside_polygon(x, y, LG_dock_area_polygon)
         return inside
-    
+
+    def check_is_inside_lg_lift_area(self, position):
+        x, y = position.x, position.y
+        inside = self.point_inside_polygon(x, y, LG_lift_area_polygon)
+        return inside
+
     def check_is_inside_5f_dock_area(self, position):
         x, y = position.x, position.y
         inside = self.point_inside_polygon(x, y, FiveF_dock_area_polygon)
