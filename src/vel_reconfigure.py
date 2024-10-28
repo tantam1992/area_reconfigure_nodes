@@ -79,7 +79,7 @@ class VelReconfigureNode:
                     rospy.loginfo("Robot is inside a corridor area.")
                     self.wait_for_reconfigure_services()
                     self.reconfigure_max_vel(0.5)
-                    self.reconfigure_min_vel(0.0)
+                    self.reconfigure_min_vel(-0.3)
                     self.reconfiguration_done = True  # Set reconfiguration status
             else:
                 if self.reconfiguration_done:
