@@ -12,7 +12,8 @@ ramp_areas = [
     [(-37.72, -5.84), (-29.60, -4.84), (-29.35, -8.54), (-37.05, -9.74)],
     # outside ramp
     # [(-15.38, 56.38), (-16.33, 56.27), (-13.59, 59.29), (-14.84, 59.20)]
-    [(-44.76, -7.53), (-47.26, -7.95), (-47.55, -6.07), (-44.85, -5.84)]
+    # [(-44.76, -7.53), (-47.26, -7.95), (-47.55, -6.07), (-44.85, -5.84)]
+    [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)]
 ]
 
 # List of corridor areas
@@ -70,7 +71,7 @@ class VelReconfigureNode:
                 if not self.reconfiguration_done:  # Perform reconfiguration only once
                     rospy.loginfo("Robot is inside a ramp area.")
                     self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.3)  # Adjust the max_vel_x parameter
+                    self.reconfigure_max_vel(0.25)  # Adjust the max_vel_x parameter
                     self.reconfigure_min_vel(-0.15)
                     self.reconfiguration_done = True  # Set reconfiguration status
             elif inside_corridor:
@@ -84,7 +85,7 @@ class VelReconfigureNode:
                 if self.reconfiguration_done:
                     rospy.loginfo("Robot is outside ramp and corridor areas.")
                     self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.4)
+                    self.reconfigure_max_vel(0.5)
                     self.reconfigure_min_vel(-0.3)
                     self.reconfiguration_done = False  # Reset reconfiguration status
 
