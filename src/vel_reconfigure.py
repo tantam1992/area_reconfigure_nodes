@@ -60,7 +60,7 @@ class VelReconfigureNode:
         # Implement logic to determine if the robot is inside the ramp or corridor areas
         if not self.enable_reconfiguration:  # Check if reconfiguration is enabled
             if self.reconfiguration_done:
-                self.reconfigure_max_vel(0.4)
+                self.reconfigure_max_vel(0.5)
                 self.reconfigure_min_vel(-0.3)
                 self.reconfiguration_done = False  # Reset reconfiguration status
         else:
