@@ -2,28 +2,15 @@
 
 import rospy
 import dynamic_reconfigure.client
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
+import math
 from std_msgs.msg import Bool
 
 # List of ramp areas
 ramp_areas = [
-    # lift ramp
-    # [(-8.5, 10.7), (-4.1, 10.7), (-4.1, 1.4), (-8.5, 1.4)],
     [(-37.72, -5.84), (-29.60, -4.84), (-29.35, -8.54), (-37.05, -9.74)],
-    # outside ramp
-    # [(-15.38, 56.38), (-16.33, 56.27), (-13.59, 59.29), (-14.84, 59.20)]
-    # [(-44.76, -7.53), (-47.26, -7.95), (-47.55, -6.07), (-44.85, -5.84)]
-    [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)]
-]
-
-# List of dock areas
-dock_areas = [
-    # LG dock
-    [(-82.43, -6.69), (-76.86, -5.87), (-76.69, -7.64), (-81.72, -8.29)]
-]
-FF_dock_areas = [
-    # 5F dock
-    [(2.70, -16.57), (0.99, -16.56), (0.96, -19.14), (2.76, -19.15)]
+    [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)],
+    [(0.95, -1.04), (3.00, -0.85), (3.075, 1.97), (0.87, 2.15)]
 ]
 
 class VelReconfigureNode:
@@ -31,117 +18,103 @@ class VelReconfigureNode:
         rospy.init_node('vel_reconfigure_node')
 
         self.current_pose = None
-        self.inside_ramp = False
-        self.inside_dock = False
-        self.reconfiguration_done = False  # Track if reconfiguration has been done
-        self.enable_reconfiguration = True  # Track enable/disable status
+        self.current_goal = None
+        self.enable_reconfiguration = True
+        self.current_state = "NORMAL"  # Possible states: NORMAL, RAMP, NEAR_GOAL
 
-        rospy.loginfo("vel reconfigure node started")
+        rospy.loginfo("Velocity and sim_time reconfigure node started")
 
-        # Subscribe to robot's pose
-        rospy.Subscriber('robot_pose', Pose, self.pose_callback)
+        rospy.Subscriber('robot_pose', Pose, self.pose_callback, queue_size=10)
+        rospy.Subscriber('/move_base/current_goal', PoseStamped, self.goal_callback, queue_size=10)
+        rospy.Subscriber('/rampreconf_enable', Bool, self.enable_callback, queue_size=10)
 
-        # Subscribe to reconfiguration enable/disable topic
-        rospy.Subscriber('/rampreconf_enable', Bool, self.enable_callback)
-
-        # Dynamic Reconfigure client
-        self.reconfigure_client = dynamic_reconfigure.client.Client('move_base/DWAPlannerROS')
-        # self.rate = rospy.Rate(2)  # Check at 2 Hz (every 0.5 seconds)
-
-    def wait_for_reconfigure_services(self):
         try:
-            rospy.loginfo("Waiting for dynamic reconfigure services...")
-            rospy.wait_for_service('/move_base/DWAPlannerROS/set_parameters')
-            self.global_reconfigure_client = dynamic_reconfigure.client.Client('/move_base/DWAPlannerROS')
-            rospy.loginfo("Dynamic reconfigure services are ready.")
-        except rospy.ROSException as e:
-            rospy.logerr(f"Failed to connect to dynamic reconfigure services: {e}")
-            rospy.signal_shutdown("Shutting down due to service connection failure.")
+            self.reconfigure_client = dynamic_reconfigure.client.Client('move_base/DWAPlannerROS')
+        except Exception as e:
+            rospy.logerr(f"Failed to create Dynamic Reconfigure Client: {e}")
+            self.reconfigure_client = None
+
+        self.rate = rospy.Rate(2)
 
     def pose_callback(self, pose_msg):
         self.current_pose = pose_msg
-        # rospy.loginfo("The current pose is : \n {}".format(pose_msg))
-        # Implement logic to determine if the robot is inside the ramp or dock areas
-        if not self.enable_reconfiguration:  # Check if reconfiguration is enabled
-            inside_ff_dock = self.check_is_inside_any_ff_dock_area(pose_msg.position)
+        if self.current_goal is None or not self.enable_reconfiguration:
+            return
 
-            if inside_ff_dock:
-                if not self.reconfiguration_done:  # Perform reconfiguration only once
-                    rospy.loginfo("Robot is inside a 5F dock area.")
-                    self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.3)
-                    self.reconfigure_min_vel(-0.3)
-                    self.reconfiguration_done = True  # Set reconfiguration status
-            else:
-                if self.reconfiguration_done:
-                    rospy.loginfo("Robot is outside 5F dock areas.")
-                    self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.5)
-                    self.reconfigure_min_vel(-0.3)
-                    self.reconfiguration_done = False  # Reset reconfiguration status                 
+        inside_ramp = self.check_is_inside_any_area(pose_msg.position, ramp_areas)
+        near_goal = self.check_is_near_goal(pose_msg, self.current_goal.pose)
 
+        if inside_ramp:
+            new_state = "RAMP"
+        elif near_goal:
+            new_state = "NEAR_GOAL"
         else:
-            inside_ramp = self.check_is_inside_any_ramp_area(pose_msg.position)
-            inside_dock = self.check_is_inside_any_dock_area(pose_msg.position)
-            
-            if inside_ramp:
-                if not self.reconfiguration_done:  # Perform reconfiguration only once
-                    rospy.loginfo("Robot is inside a ramp area.")
-                    self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.25)  # Adjust the max_vel_x parameter
-                    self.reconfigure_min_vel(-0.15)
-                    self.reconfiguration_done = True  # Set reconfiguration status
-            elif inside_dock:
-                if not self.reconfiguration_done:  # Perform reconfiguration only once
-                    rospy.loginfo("Robot is inside a dock area.")
-                    self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.3)
-                    self.reconfigure_min_vel(-0.3)
-                    self.reconfiguration_done = True  # Set reconfiguration status
-            else:
-                if self.reconfiguration_done:
-                    rospy.loginfo("Robot is outside ramp and dock areas.")
-                    self.wait_for_reconfigure_services()
-                    self.reconfigure_max_vel(0.5)
-                    self.reconfigure_min_vel(-0.3)
-                    self.reconfiguration_done = False  # Reset reconfiguration status
-        # self.rate.sleep()
+            new_state = "NORMAL"
+
+        if new_state != self.current_state:
+            self.current_state = new_state
+            self.update_configurations(new_state)
+
+        self.rate.sleep()
+
+    def update_configurations(self, new_state):
+        if new_state == "RAMP":
+            rospy.loginfo("Robot is inside a ramp area. Setting max_vel_x=0.3 and min_vel_x=-0.15.")
+            self.reconfigure_sim_time(3.0)
+            self.reconfigure_max_vel(0.3)
+            self.reconfigure_min_vel(-0.15)
+        elif new_state == "NEAR_GOAL":
+            rospy.loginfo("Robot is near the goal. Setting max_vel_x=0.3 and sim_time=1.1.")
+            self.reconfigure_sim_time(1.1)
+            self.reconfigure_max_vel(0.3)
+        elif new_state == "NORMAL":
+            rospy.loginfo("Robot is outside special areas. Resetting max_vel_x=0.5, min_vel_x=-0.3, and sim_time=3.0")
+            self.reconfigure_sim_time(3.0)
+            self.reconfigure_max_vel(0.5)
+            self.reconfigure_min_vel(-0.3)
+
+    def goal_callback(self, goal_msg):
+        rospy.loginfo("New goal received. Checking location.")
+        self.current_goal = goal_msg
+        if not self.check_is_inside_any_area(self.current_pose.position, ramp_areas):
+            self.current_state = "NORMAL"
+            self.update_configurations("NORMAL")
 
     def enable_callback(self, enable_msg):
-        self.enable_reconfiguration = enable_msg.data  # Update enable/disable status
+        self.enable_reconfiguration = enable_msg.data
+
+    def reconfigure_sim_time(self, new_sim_time):
+        if self.reconfigure_client:
+            rospy.loginfo(f"Reconfiguring sim_time to: {new_sim_time}")
+            params = {'sim_time': new_sim_time}
+            self.reconfigure_client.update_configuration(params)
 
     def reconfigure_max_vel(self, new_max_vel):
-        rospy.loginfo("Reconfiguring max_vel_x to: {}".format(new_max_vel))
-        params = {'max_vel_x': new_max_vel}
-        self.reconfigure_client.update_configuration(params)
+        if self.reconfigure_client:
+            rospy.loginfo(f"Reconfiguring max_vel_x to: {new_max_vel}")
+            params = {'max_vel_x': new_max_vel}
+            self.reconfigure_client.update_configuration(params)
 
     def reconfigure_min_vel(self, new_min_vel):
-        rospy.loginfo("Reconfiguring min_vel_x to: {}".format(new_min_vel))
-        params = {'min_vel_x': new_min_vel}
-        self.reconfigure_client.update_configuration(params)
+        if self.reconfigure_client:
+            rospy.loginfo(f"Reconfiguring min_vel_x to: {new_min_vel}")
+            params = {'min_vel_x': new_min_vel}
+            self.reconfigure_client.update_configuration(params)
 
-    def check_is_inside_any_ramp_area(self, position):
-        # Check if the given position is inside any of the ramp areas
-        for ramp_area_polygon in ramp_areas:
-            if self.point_inside_polygon(position.x, position.y, ramp_area_polygon):
+    def check_is_near_goal(self, pose1, pose2):
+        x_dist = pose1.position.x - pose2.position.x
+        y_dist = pose1.position.y - pose2.position.y
+        distance = math.sqrt(x_dist**2 + y_dist**2)
+        return distance < 0.4
+
+    def check_is_inside_any_area(self, position, areas):
+        for area in areas:
+            if self.point_inside_polygon(position.x, position.y, area):
                 return True
         return False
 
-    def check_is_inside_any_dock_area(self, position):
-        # Check if the given position is inside any of the dock areas
-        for dock_area_polygon in dock_areas:
-            if self.point_inside_polygon(position.x, position.y, dock_area_polygon):
-                return True
-        return False
-
-    def check_is_inside_any_ff_dock_area(self, position):
-        # Check if the given position is inside any of the dock areas
-        for dock_area_polygon in FF_dock_areas:
-            if self.point_inside_polygon(position.x, position.y, dock_area_polygon):
-                return True
-        return False
-
-    def point_inside_polygon(self, x, y, vertices):
+    @staticmethod
+    def point_inside_polygon(x, y, vertices):
         n = len(vertices)
         inside = False
         p1x, p1y = vertices[0]
@@ -160,6 +133,6 @@ class VelReconfigureNode:
 if __name__ == '__main__':
     try:
         node = VelReconfigureNode()
-        rospy.spin()  # Process incoming messages
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass
