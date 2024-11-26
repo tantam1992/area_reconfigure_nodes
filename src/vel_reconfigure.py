@@ -12,6 +12,7 @@ ramp_areas = [
     [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)],
     [(0.95, -1.04), (3.00, -0.85), (3.075, 1.97), (0.87, 2.15)]
 ]
+near_goal_dist = 0.5
 
 class VelReconfigureNode:
     def __init__(self):
@@ -105,7 +106,7 @@ class VelReconfigureNode:
         x_dist = pose1.position.x - pose2.position.x
         y_dist = pose1.position.y - pose2.position.y
         distance = math.sqrt(x_dist**2 + y_dist**2)
-        return distance < 0.4
+        return distance < near_goal_dist
 
     def check_is_inside_any_area(self, position, areas):
         for area in areas:
