@@ -35,7 +35,7 @@ class VelReconfigureNode:
             rospy.logerr(f"Failed to create Dynamic Reconfigure Client: {e}")
             self.reconfigure_client = None
 
-        self.rate = rospy.Rate(2)
+        self.rate = rospy.Rate(5)
 
     def pose_callback(self, pose_msg):
         self.current_pose = pose_msg
