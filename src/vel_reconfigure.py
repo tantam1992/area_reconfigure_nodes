@@ -12,7 +12,7 @@ ramp_areas = [
     [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)],
     [(0.95, -1.04), (3.00, -0.85), (3.075, 1.97), (0.87, 2.15)]
 ]
-near_goal_dist = 0.5
+near_goal_dist = 1.3
 
 class VelReconfigureNode:
     def __init__(self):
