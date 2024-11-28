@@ -12,6 +12,7 @@ ramp_areas = [
     [(-44.02, -4.97), (-47.30, -5.28), (-46.71, -7.91), (-43.92, -7.68)],
     [(0.95, -1.04), (3.00, -0.85), (3.075, 1.97), (0.87, 2.15)]
 ]
+near_goal_dist = 0.8
 
 class VelReconfigureNode:
     def __init__(self):
@@ -34,35 +35,16 @@ class VelReconfigureNode:
             rospy.logerr(f"Failed to create Dynamic Reconfigure Client: {e}")
             self.reconfigure_client = None
 
-        # Perform an initial evaluation of the state
-        self.check_and_update_state()
+        # self.rate = rospy.Rate(5)
 
     def pose_callback(self, pose_msg):
         self.current_pose = pose_msg
         if self.current_goal is None or not self.enable_reconfiguration:
             return
 
-        # Check and update the robot's state
-        self.check_and_update_state()
+        inside_ramp = self.check_is_inside_any_area(pose_msg.position, ramp_areas)
+        near_goal = self.check_is_near_goal(pose_msg, self.current_goal.pose)
 
-    def goal_callback(self, goal_msg):
-        rospy.loginfo("New goal received. Checking location.")
-        self.current_goal = goal_msg
-
-        # Check and update the robot's state immediately
-        self.check_and_update_state()
-
-    def enable_callback(self, enable_msg):
-        self.enable_reconfiguration = enable_msg.data
-
-    def check_and_update_state(self):
-        if self.current_pose is None or self.current_goal is None or not self.enable_reconfiguration:
-            return
-
-        inside_ramp = self.check_is_inside_any_area(self.current_pose.position, ramp_areas)
-        near_goal = self.check_is_near_goal(self.current_pose, self.current_goal.pose)
-
-        # State priority: RAMP > NEAR_GOAL > NORMAL
         if inside_ramp:
             new_state = "RAMP"
         elif near_goal:
@@ -73,6 +55,8 @@ class VelReconfigureNode:
         if new_state != self.current_state:
             self.current_state = new_state
             self.update_configurations(new_state)
+
+        # self.rate.sleep()
 
     def update_configurations(self, new_state):
         if new_state == "RAMP":
@@ -90,53 +74,39 @@ class VelReconfigureNode:
             self.reconfigure_max_vel(0.5)
             self.reconfigure_min_vel(-0.3)
 
+    def goal_callback(self, goal_msg):
+        rospy.loginfo("New goal received. Checking location.")
+        self.current_goal = goal_msg
+        if not self.check_is_inside_any_area(self.current_pose.position, ramp_areas):
+            self.current_state = "NORMAL"
+            self.update_configurations("NORMAL")
+
+    def enable_callback(self, enable_msg):
+        self.enable_reconfiguration = enable_msg.data
+
     def reconfigure_sim_time(self, new_sim_time):
         if self.reconfigure_client:
-            try:
-                rospy.loginfo(f"Reconfiguring sim_time to: {new_sim_time}")
-                params = {'sim_time': new_sim_time}
-                self.reconfigure_client.update_configuration(params)
-            except Exception as e:
-                rospy.logerr(f"Failed to update sim_time: {e}")
-        else:
-            rospy.logwarn("Dynamic Reconfigure Client is not initialized. Cannot update sim_time.")
+            rospy.loginfo(f"Reconfiguring sim_time to: {new_sim_time}")
+            params = {'sim_time': new_sim_time}
+            self.reconfigure_client.update_configuration(params)
 
     def reconfigure_max_vel(self, new_max_vel):
         if self.reconfigure_client:
-            try:
-                rospy.loginfo(f"Reconfiguring max_vel_x to: {new_max_vel}")
-                params = {'max_vel_x': new_max_vel}
-                self.reconfigure_client.update_configuration(params)
-            except Exception as e:
-                rospy.logerr(f"Failed to update max_vel_x: {e}")
-        else:
-            rospy.logwarn("Dynamic Reconfigure Client is not initialized. Cannot update max_vel_x.")
+            rospy.loginfo(f"Reconfiguring max_vel_x to: {new_max_vel}")
+            params = {'max_vel_x': new_max_vel}
+            self.reconfigure_client.update_configuration(params)
 
     def reconfigure_min_vel(self, new_min_vel):
         if self.reconfigure_client:
-            try:
-                rospy.loginfo(f"Reconfiguring min_vel_x to: {new_min_vel}")
-                params = {'min_vel_x': new_min_vel}
-                self.reconfigure_client.update_configuration(params)
-            except Exception as e:
-                rospy.logerr(f"Failed to update min_vel_x: {e}")
-        else:
-            rospy.logwarn("Dynamic Reconfigure Client is not initialized. Cannot update min_vel_x.")
+            rospy.loginfo(f"Reconfiguring min_vel_x to: {new_min_vel}")
+            params = {'min_vel_x': new_min_vel}
+            self.reconfigure_client.update_configuration(params)
 
     def check_is_near_goal(self, pose1, pose2):
-        # Add hysteresis to avoid oscillation
         x_dist = pose1.position.x - pose2.position.x
         y_dist = pose1.position.y - pose2.position.y
         distance = math.sqrt(x_dist**2 + y_dist**2)
-
-        # Hysteresis thresholds
-        enter_threshold = 0.5  # Enter NEAR_GOAL state
-        exit_threshold = 0.3   # Exit NEAR_GOAL state
-
-        if self.current_state == "NEAR_GOAL":
-            return distance < exit_threshold
-        else:
-            return distance < enter_threshold
+        return distance < near_goal_dist
 
     def check_is_inside_any_area(self, position, areas):
         for area in areas:
@@ -161,11 +131,9 @@ class VelReconfigureNode:
             p1x, p1y = p2x, p2y
         return inside
 
-
 if __name__ == '__main__':
     try:
         node = VelReconfigureNode()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
-
