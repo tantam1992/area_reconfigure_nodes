@@ -66,7 +66,7 @@ class SimTimeReconfigureNode:
         x_distance = pose1.position.x - pose2.position.x
         y_distance = pose1.position.y - pose2.position.y
         distance = math.sqrt((x_distance * x_distance) + (y_distance * y_distance))
-        return distance < 0.4  # Return True if within 0.4 units
+        return distance < 0.5  # Return True if within 0.4 units
 
 if __name__ == '__main__':
     try:
