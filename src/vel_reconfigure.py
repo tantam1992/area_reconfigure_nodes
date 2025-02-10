@@ -68,8 +68,8 @@ class VelReconfigureNode:
         if new_state == "RAMP":
             rospy.loginfo("Robot is inside a ramp area. Setting max_vel_x=0.3 and min_vel_x=-0.15.")
             # self.reconfigure_sim_time(3.0)
-            self.reconfigure_max_vel(0.3)
-            self.reconfigure_min_vel(-0.15)
+            self.reconfigure_max_vel(0.5)
+            self.reconfigure_min_vel(-0.3)
         elif new_state == "NEAR_GOAL":
             rospy.loginfo("Robot is near the goal. Setting max_vel_x=0.3 and sim_time=1.1.")
             # self.reconfigure_sim_time(1.1)
@@ -77,8 +77,8 @@ class VelReconfigureNode:
         elif new_state == "NORMAL":
             rospy.loginfo("Robot is outside special areas. Resetting max_vel_x=0.5, min_vel_x=-0.3, and sim_time=3.0")
             # self.reconfigure_sim_time(3.0)
-            self.reconfigure_max_vel(0.5)
-            self.reconfigure_min_vel(-0.3)
+            self.reconfigure_max_vel(0.6)
+            self.reconfigure_min_vel(-0.5)
 
     def goal_callback(self, goal_msg):
         rospy.loginfo("New goal received. Checking location.")
@@ -99,8 +99,10 @@ class VelReconfigureNode:
     def reconfigure_max_vel(self, new_max_vel):
         if self.reconfigure_client:
             rospy.loginfo(f"Reconfiguring max_vel_x to: {new_max_vel}")
-            params = {'max_vel_x': new_max_vel}
-            self.reconfigure_client.update_configuration(params)
+            params_x = {'max_vel_x': new_max_vel}
+            params_trans = {'max_vel_trans': new_max_vel}
+            self.reconfigure_client.update_configuration(params_x)
+            self.reconfigure_client.update_configuration(params_trans)
 
     def reconfigure_min_vel(self, new_min_vel):
         if self.reconfigure_client:
