@@ -13,6 +13,17 @@ ramp_areas = [
     [(0.95, -1.04), (3.00, -0.85), (3.075, 1.97), (0.87, 2.15)]
 ]
 
+corner_areas_LG = [
+    [(-89.56, 0.81), (-85.24, 1.30), (-86.00, 6.62), (-90.27, 6.17)],
+    [(-84.10, -7.33), (-83.70, -10.36), (-87.15, -10.793), (-87.42, -7.74)],
+    [(-27.38, -1.77), (-24.97, -1.54), (-24.63, -4.35), (-27.08, -4.71)]
+]
+
+corner_areas_5F = [
+    # [(-89.56, 0.81), (-85.24, 1.30), (-86.00, 6.62), (-90.27, 6.17)],
+    # [(-84.10, -7.33), (-83.70, -10.36), (-87.15, -10.793), (-87.42, -7.74)],
+    [(-4.42, -6.39), (-2.68, -6.34), (-2.55, -7.44), (-4.33, -7.92)]
+]
 
 class VelReconfigureNode:
     def __init__(self):
@@ -43,6 +54,8 @@ class VelReconfigureNode:
             return
 
         inside_ramp = self.check_is_inside_any_area(pose_msg.position, ramp_areas)
+        indside_corner_LG = self.check_is_inside_any_area(pose_msg.position, corner_areas_LG)
+        indside_corner_5F = self.check_is_inside_any_area(pose_msg.position, corner_areas_5F)
         near_goal = self.check_is_near_goal(pose_msg, self.current_goal.pose)
 
         if self.enable_reconfiguration:
@@ -50,11 +63,15 @@ class VelReconfigureNode:
                 new_state = "RAMP"
             elif near_goal:
                 new_state = "NEAR_GOAL"
+            elif indside_corner_LG:
+                new_state = "CORNER"            
             else:
                 new_state = "NORMAL"
         else:
             if near_goal:
                 new_state = "NEAR_GOAL"
+            elif indside_corner_5F:
+                new_state = "CORNER"            
             else:
                 new_state = "NORMAL"
 
@@ -66,16 +83,21 @@ class VelReconfigureNode:
 
     def update_configurations(self, new_state):
         if new_state == "RAMP":
-            rospy.loginfo("Robot is inside a ramp area. Setting max_vel_x=0.3 and min_vel_x=-0.15.")
+            rospy.loginfo("Robot is inside a ramp area. Setting max_vel_x=0.4 and min_vel_x=-0.3.")
             # self.reconfigure_sim_time(3.0)
-            self.reconfigure_max_vel(0.5)
+            self.reconfigure_max_vel(0.4)
             self.reconfigure_min_vel(-0.3)
         elif new_state == "NEAR_GOAL":
-            rospy.loginfo("Robot is near the goal. Setting max_vel_x=0.3 and sim_time=1.1.")
+            rospy.loginfo("Robot is near the goal. Setting max_vel_x=0.3.")
             # self.reconfigure_sim_time(1.1)
             self.reconfigure_max_vel(0.3)
+        elif new_state == "CORNER":
+            rospy.loginfo("Robot is inside a corner area. Setting max_vel_x=0.45 and min_vel_x=-0.4.")
+            self.reconfigure_max_vel(0.45)
+            sleep(0.1)
+            self.reconfigure_min_vel(-0.4)            
         elif new_state == "NORMAL":
-            rospy.loginfo("Robot is outside special areas. Resetting max_vel_x=0.5, min_vel_x=-0.3, and sim_time=3.0")
+            rospy.loginfo("Robot is outside special areas. Resetting max_vel_x=0.6, min_vel_x=-0.5.")
             # self.reconfigure_sim_time(3.0)
             self.reconfigure_max_vel(0.6)
             self.reconfigure_min_vel(-0.5)
