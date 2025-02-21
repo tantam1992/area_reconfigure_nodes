@@ -94,7 +94,6 @@ class VelReconfigureNode:
         elif new_state == "CORNER":
             rospy.loginfo("Robot is inside a corner area. Setting max_vel_x=0.45 and min_vel_x=-0.4.")
             self.reconfigure_max_vel(0.45)
-            sleep(0.1)
             self.reconfigure_min_vel(-0.4)            
         elif new_state == "NORMAL":
             rospy.loginfo("Robot is outside special areas. Resetting max_vel_x=0.6, min_vel_x=-0.5.")
