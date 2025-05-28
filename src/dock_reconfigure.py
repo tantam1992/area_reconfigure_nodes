@@ -3,41 +3,45 @@
 import rospy
 import dynamic_reconfigure.client
 from geometry_msgs.msg import Pose
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 
-## test in simulation
-# LG_dock_area_polygon = [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)]
-# FiveF_dock_area_polygon = [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)]
-# LG_dock_area_polygon = [(-2.3715, 47.51), (-1.5262, 47.488), (-1.47, 56.148), (-2.1851, 56.092)]
-LG_dock_area_polygon = [(-75.65, -6.98), (-75.61, -6.45), (-84.18, -7.00), (-84.13, -7.79)]
-# LG_lift_area_polygon = [(-25.48, -3.04), (-25.84, -0.97), (-29.66, -1.53), (-29.25, -4.92)]
-FiveF_dock_area_polygon = [(1.4971, -19.281), (2.189, -19.467), (2.0321, -14.916), (1.4992, -14.899)]
+# Constants
+LG_DOCK_AREA_POLYGON = [(-75.65, -6.98), (-75.61, -6.45), (-84.18, -7.00), (-84.13, -7.79)]
+FIVEF_DOCK_AREA_POLYGON = [(1.4971, -19.281), (2.189, -19.467), (2.0321, -14.916), (1.4992, -14.899)]
 
+DOCK_FOOTPRINT  =   [[0.15,-0.40] , [0.15 ,-0.31], [0.15 , 0.31], [0.15, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
+SMALL_FOOTPRINT  =  [[0.31,-0.45] , [0.45 ,-0.31], [0.45 , 0.31], [0.31, 0.45 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
+BIG_FOOTPRINT =     [[0.31,-0.495], [0.495,-0.31], [0.495, 0.31], [0.31, 0.495], [-0.97, 0.495], [-1.27, 0.42], [-1.27,-0.42], [-0.97,-0.495]]
 
-## footprint
-small_footprint  = [[0.15, -0.40], [0.15, -0.31], [0.15, 0.31], [0.15, 0.40], [-0.97, 0.40], [-1.27, 0.10], [-1.27, -0.10], [-0.97, -0.40]]
-# med_footprint = [[0.31,-0.45],[0.45,-0.31],[0.45,0.31],[0.31,0.45],[-0.97,0.45],[-1.27,0.42],[-1.27,-0.42],[-0.97,-0.45]]
-big_footprint = [[0.31,-0.5],[0.5,-0.31],[0.5,0.31],[0.31,0.5],[-0.97,0.5],[-1.27,0.42],[-1.27,-0.42],[-0.97,-0.5]]
-
+FOLD_STATE_READY = "OPERATIONAL/READY"
 
 class DockReconfigureNode:
     def __init__(self):
         rospy.init_node('dock_reconfigure_node')
 
         self.current_pose = None
-        self.inside = False
-        self.reconfiguration_done = False  # Track if reconfiguration has been done
-        self.enable_reconfiguration = True  # Track enable/disable status
+        self.fold_state = "UNKNOWN"
+        self.enable_reconfiguration = True
+        self.dynamic_reconfigure_services_ready = False
+
+        # Track the last footprint sent to avoid redundant reconfigs
+        self.last_footprint = None
 
         rospy.loginfo("Dock reconfigure node started")
 
-        # Subscribe to robot's pose
-        rospy.Subscriber('robot_pose', Pose, self.pose_callback)
+        self.fold_state_sub = rospy.Subscriber('/fold_state', String, self.fold_state_callback)
+        self.pose_sub = rospy.Subscriber('robot_pose', Pose, self.pose_callback)
+        self.enable_sub = rospy.Subscriber('/rampreconf_enable', Bool, self.enable_callback)
 
-        # Subscribe to reconfiguration enable/disable topic
-        rospy.Subscriber('/rampreconf_enable', Bool, self.enable_callback)
+        self.global_reconfigure_client = None
+        self.local_reconfigure_client = None
+
+        self.wait_for_reconfigure_services()
 
     def wait_for_reconfigure_services(self):
+        if self.dynamic_reconfigure_services_ready:
+            return
+
         try:
             rospy.loginfo("Waiting for dynamic reconfigure services...")
             rospy.wait_for_service('/move_base/global_costmap/set_parameters')
@@ -45,51 +49,61 @@ class DockReconfigureNode:
             self.global_reconfigure_client = dynamic_reconfigure.client.Client('/move_base/global_costmap')
             self.local_reconfigure_client = dynamic_reconfigure.client.Client('/move_base/local_costmap')
             rospy.loginfo("Dynamic reconfigure services are ready.")
+            self.dynamic_reconfigure_services_ready = True
         except rospy.ROSException as e:
             rospy.logerr(f"Failed to connect to dynamic reconfigure services: {e}")
             rospy.signal_shutdown("Shutting down due to service connection failure.")
 
+    def fold_state_callback(self, msg):
+        self.fold_state = msg.data
+        self.update_footprint()
+
     def pose_callback(self, pose_msg):
         self.current_pose = pose_msg
-        if not self.enable_reconfiguration:
-            if self.check_is_inside_5f_dock_area(pose_msg.position):
-                if not self.reconfiguration_done:
-                    rospy.loginfo("Robot is close to 5F docking area.")
-                    # Reconfigure footprint for local and global costmaps
-                    self.reconfigure_footprint(small_footprint)
-                    self.reconfiguration_done = True
-            else:
-                if self.reconfiguration_done:
-                    rospy.loginfo("Robot is outside 5F docking area.")
-                    # Reset the footprint to default
-                    self.reconfigure_footprint(big_footprint)
-                    self.reconfiguration_done = False
-        else:
-            if self.check_is_inside_lg_dock_area(pose_msg.position):
-                if not self.reconfiguration_done:
-                    rospy.loginfo("Robot is close to LG docking area.")
-                    # Reconfigure footprint for local and global costmaps
-                    self.reconfigure_footprint(small_footprint)
-                    self.reconfiguration_done = True
-            # elif self.check_is_inside_lg_lift_area(pose_msg.position):
-            #     if not self.reconfiguration_done:
-            #         rospy.loginfo("Robot is close to LG lift area.")
-            #         # Reconfigure footprint for local and global costmaps
-            #         self.reconfigure_footprint(med_footprint)
-            #         self.reconfiguration_done = True
-            else:
-                if self.reconfiguration_done:
-                    rospy.loginfo("Robot is outside LG docking area.")
-                    # Reset the footprint to default
-                    self.reconfigure_footprint(big_footprint)
-                    self.reconfiguration_done = False
+        self.update_footprint()
 
     def enable_callback(self, enable_msg):
         self.enable_reconfiguration = enable_msg.data
+        self.update_footprint()
+
+    def update_footprint(self):
+        """Determine and set the correct footprint according to area and fold state."""
+        if not self.current_pose or not self.dynamic_reconfigure_services_ready:
+            return
+
+        # Select dock area polygon based on enable flag
+        if self.enable_reconfiguration:
+            dock_polygon = LG_DOCK_AREA_POLYGON
+            dock_area_name = "LG"
+        else:
+            dock_polygon = FIVEF_DOCK_AREA_POLYGON
+            dock_area_name = "5F"
+
+        robot_pos = self.current_pose.position
+        in_dock_area = self.point_inside_polygon(robot_pos.x, robot_pos.y, dock_polygon)
+
+        # Choose correct footprint
+        if in_dock_area:
+            target_footprint = DOCK_FOOTPRINT
+            rospy.loginfo(f"Robot is inside {dock_area_name} dock area, using DOCK_FOOTPRINT")
+        else:
+            if self.fold_state == FOLD_STATE_READY:
+                target_footprint = SMALL_FOOTPRINT
+                rospy.loginfo("Robot is outside dock area and arms are CLOSED, using SMALL_FOOTPRINT")
+            else:
+                target_footprint = BIG_FOOTPRINT
+                rospy.loginfo("Robot is outside dock area and arms are OPEN, using BIG_FOOTPRINT")
+
+        # Only reconfigure if the footprint changes
+        if self.last_footprint != target_footprint:
+            self.reconfigure_footprint(target_footprint)
+            self.last_footprint = target_footprint
 
     def reconfigure_footprint(self, new_footprint):
-        # Wait for dynamic reconfigure services
-        self.wait_for_reconfigure_services()
+        if not self.dynamic_reconfigure_services_ready:
+            rospy.logerr("Dynamic reconfigure services not available.  Skipping reconfiguration.")
+            return
+
         rospy.loginfo("Reconfiguring footprint to: {}".format(new_footprint))
         params = {'footprint': new_footprint}
         try:
@@ -100,21 +114,6 @@ class DockReconfigureNode:
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
 
-    def check_is_inside_lg_dock_area(self, position):
-        x, y = position.x, position.y
-        inside = self.point_inside_polygon(x, y, LG_dock_area_polygon)
-        return inside
-
-    def check_is_inside_lg_lift_area(self, position):
-        x, y = position.x, position.y
-        inside = self.point_inside_polygon(x, y, LG_lift_area_polygon)
-        return inside
-
-    def check_is_inside_5f_dock_area(self, position):
-        x, y = position.x, position.y
-        inside = self.point_inside_polygon(x, y, FiveF_dock_area_polygon)
-        return inside
-    
     def point_inside_polygon(self, x, y, vertices):
         n = len(vertices)
         inside = False
@@ -135,6 +134,5 @@ if __name__ == '__main__':
     try:
         node = DockReconfigureNode()
         rospy.spin()
-
     except rospy.ROSInterruptException:
         pass
