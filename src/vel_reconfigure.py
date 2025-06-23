@@ -25,6 +25,15 @@ corner_areas_5F = [
     [(-4.42, -6.39), (-2.68, -6.34), (-2.55, -7.44), (-4.33, -7.92)]
 ]
 
+dock_areas_LG = [
+    [(-82.43, -6.69), (-76.86, -5.87), (-76.69, -7.64), (-81.72, -8.29)]
+
+]
+
+dock_area_5F = [
+    [(2.70, -16.57), (0.99, -16.56), (0.96, -19.14), (2.76, -19.15)]
+]
+
 class VelReconfigureNode:
     def __init__(self):
         rospy.init_node('vel_reconfigure_node')
@@ -56,19 +65,19 @@ class VelReconfigureNode:
         inside_ramp = self.check_is_inside_any_area(pose_msg.position, ramp_areas)
         indside_corner_LG = self.check_is_inside_any_area(pose_msg.position, corner_areas_LG)
         indside_corner_5F = self.check_is_inside_any_area(pose_msg.position, corner_areas_5F)
-        near_goal = self.check_is_near_goal(pose_msg, self.current_goal.pose)
+        near_goal_and_in_dock = self.check_is_near_goal_and_in_dock(pose_msg, self.current_goal.pose)
 
         if self.enable_reconfiguration:
             if inside_ramp:
                 new_state = "RAMP"
-            elif near_goal:
+            elif near_goal_and_in_dock:
                 new_state = "NEAR_GOAL"
             elif indside_corner_LG:
                 new_state = "CORNER"            
             else:
                 new_state = "NORMAL"
         else:
-            if near_goal:
+            if near_goal_and_in_dock:
                 new_state = "NEAR_GOAL"
             elif indside_corner_5F:
                 new_state = "CORNER"            
@@ -131,12 +140,21 @@ class VelReconfigureNode:
             params = {'min_vel_x': new_min_vel}
             self.reconfigure_client.update_configuration(params)
 
-    def check_is_near_goal(self, pose1, pose2):
+    def check_is_near_goal_and_in_dock(self, pose1, pose2):
         near_goal_dist = 0.5
         x_dist = pose1.position.x - pose2.position.x
         y_dist = pose1.position.y - pose2.position.y
         distance = math.sqrt(x_dist**2 + y_dist**2)
-        return distance < near_goal_dist
+        
+        # Check if the robot is near the goal AND inside any of the dock areas
+        is_near = distance < near_goal_dist
+        
+        # Determine which dock areas to use based on your setup (LG or 5F or both)
+        # This example checks both.  Adjust as needed.
+        is_in_dock = self.check_is_inside_any_area(pose1.position, dock_areas_LG) or \
+                     self.check_is_inside_any_area(pose1.position, dock_area_5F)
+        
+        return is_near and is_in_dock
 
     def check_is_inside_any_area(self, position, areas):
         for area in areas:
