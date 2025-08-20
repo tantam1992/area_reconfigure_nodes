@@ -6,11 +6,9 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import Bool, String
 
 # Constants
-LG_ROTATE_AREA_POLYGON = [(-88.09, -1.78), (-89.62, -1.63), (-89.63, 2.84), (-88.32, 2.91)]
 LG_DOCK_AREA_POLYGON = [(-75.65, -6.98), (-75.61, -6.45), (-84.18, -7.00), (-84.13, -7.79)]
 FIVEF_DOCK_AREA_POLYGON = [(1.4971, -19.281), (2.189, -19.467), (2.0321, -14.916), (1.4992, -14.899)]
 
-ROTATE_FOOTPRINT  =  [[0.31,-0.40] , [0.31 ,-0.31], [0.31 , 0.31], [0.31, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
 DOCK_FOOTPRINT  =   [[0.15,-0.40] , [0.15 ,-0.31], [0.15 , 0.31], [0.15, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
 SMALL_FOOTPRINT  =  [[0.31,-0.45] , [0.45 ,-0.31], [0.45 , 0.31], [0.31, 0.45 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
 BIG_FOOTPRINT =     [[0.31,-0.495], [0.495,-0.31], [0.495, 0.31], [0.31, 0.495], [-0.97, 0.495], [-1.27, 0.42], [-1.27,-0.42], [-0.97,-0.495]]
@@ -81,18 +79,13 @@ class DockReconfigureNode:
             dock_polygon = FIVEF_DOCK_AREA_POLYGON
             dock_area_name = "5F"
 
-        rotate_polygon = LG_ROTATE_AREA_POLYGON
         robot_pos = self.current_pose.position
         in_dock_area = self.point_inside_polygon(robot_pos.x, robot_pos.y, dock_polygon)
-        in_rotate_area = self.point_inside_polygon(robot_pos.x, robot_pos.y, rotate_polygon)
 
         # Choose correct footprint
         if in_dock_area:
             target_footprint = DOCK_FOOTPRINT
             rospy.loginfo(f"Robot is inside {dock_area_name} dock area, using DOCK_FOOTPRINT")
-        elif in_rotate_area and self.fold_state == FOLD_STATE_READY:
-            target_footprint = ROTATE_FOOTPRINT
-            rospy.loginfo(f"Robot is inside LG rotate area, using ROTATE_FOOTPRINT")
         else:
             if self.fold_state == FOLD_STATE_READY:
                 target_footprint = SMALL_FOOTPRINT
