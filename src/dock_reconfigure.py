@@ -11,11 +11,13 @@ LG_DOCK_AREA_POLYGON = [(-75.65, -6.98), (-75.61, -6.45), (-84.18, -7.00), (-84.
 FIVEF_DOCK_AREA_POLYGON = [(1.4971, -19.281), (2.189, -19.467), (2.0321, -14.916), (1.4992, -14.899)]
 
 ROTATE_FOOTPRINT  =  [[0.31,-0.40] , [0.31 ,-0.31], [0.31 , 0.31], [0.31, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
-DOCK_FOOTPRINT  =   [[0.15,-0.40] , [0.15 ,-0.31], [0.15 , 0.31], [0.15, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
-SMALL_FOOTPRINT  =  [[0.31,-0.45] , [0.45 ,-0.31], [0.45 , 0.31], [0.31, 0.45 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
-BIG_FOOTPRINT =     [[0.31,-0.495], [0.495,-0.31], [0.495, 0.31], [0.31, 0.495], [-0.97, 0.495], [-1.27, 0.42], [-1.27,-0.42], [-0.97,-0.495]]
+DOCK_FOOTPRINT    =  [[0.15,-0.40] , [0.15 ,-0.31], [0.15 , 0.31], [0.15, 0.40 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
+SMALL_FOOTPRINT   =  [[0.31,-0.45] , [0.45 ,-0.31], [0.45 , 0.31], [0.31, 0.45 ], [-0.97, 0.40] , [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.40] ]
+UNLOAD_FOOTPRINT  =  [[0.31,-0.495], [0.495,-0.31], [0.495, 0.31], [0.31, 0.495], [-0.97, 0.495], [-1.07, 0.10], [-1.07,-0.10], [-0.97,-0.495]]
+BIG_FOOTPRINT     =  [[0.31,-0.495], [0.495,-0.31], [0.495, 0.31], [0.31, 0.495], [-0.97, 0.495], [-1.27, 0.42], [-1.27,-0.42], [-0.97,-0.495]]
 
 FOLD_STATE_READY = "OPERATIONAL/READY"
+FOLD_STATE_READY_PICKUP = "OPERATIONAL/READY_PICKUP"
 
 class DockReconfigureNode:
     def __init__(self):
@@ -97,6 +99,9 @@ class DockReconfigureNode:
             if self.fold_state == FOLD_STATE_READY:
                 target_footprint = SMALL_FOOTPRINT
                 rospy.loginfo("Robot is outside dock area and arms are CLOSED, using SMALL_FOOTPRINT")
+            elif self.fold_state == FOLD_STATE_READY_PICKUP:
+                target_footprint = UNLOAD_FOOTPRINT
+                rospy.loginfo("Robot is outside dock area and arms are OPENED, using UNLOAD_FOOTPRINT")
             else:
                 target_footprint = BIG_FOOTPRINT
                 rospy.loginfo("Robot is outside dock area and arms are OPEN, using BIG_FOOTPRINT")
